@@ -43,7 +43,7 @@ echo ""
 # Step 1: Update and Install Packages
 echo "--> Step 1: Updating and installing required packages..."
 apt-get update
-apt-get install libwayland-client0 libwayland-server0 libwayland-dev wlr-randr weston labwc chromium-browser swayidle ydotool -y
+apt-get install libwayland-client0 libwayland-server0 libwayland-dev wlr-randr weston labwc chromium-browser swayidle wtype -y
 # Install additional dependencies that might be needed
 apt-get install libdrm2 libgbm1 libegl1-mesa libgl1-mesa-dri -y
 # Install polkit for proper seat management (required for labwc)
@@ -89,6 +89,13 @@ cat > $PI_HOME/.config/labwc/autostart << EOF
 # Disable screen blanking and power management
 swayidle -w timeout 10000 'echo "keepalive"' &
 
+# Kill any existing Chromium processes before starting new one
+pkill -f chromium-browser || true
+
+# Set cursor to minimal size (effectively invisible)
+export XCURSOR_SIZE=1
+export XCURSOR_THEME=""
+
 # Start a 'keep-alive' process to prevent monitor sleep
 (
     while true; do
@@ -105,6 +112,7 @@ chromium-browser \\
     --enable-features=UseOzonePlatform \\
     --noerrdialogs \\
     --disable-infobars \\
+    --disable-cache \\
     --disable-session-crashed-bubble \\
     --disable-component-update \\
     --disable-features=Translate \\
@@ -142,6 +150,8 @@ if [ -z "\$WAYLAND_DISPLAY" ] && [ "\$(tty)" = "/dev/tty1" ]; then
         export GDK_BACKEND=wayland
         export MOZ_ENABLE_WAYLAND=1
         export WLR_RENDERER=pixman
+        export XCURSOR_SIZE=1
+        export XCURSOR_THEME=""
         
         # Create runtime directory
         mkdir -p \$XDG_RUNTIME_DIR
@@ -335,6 +345,8 @@ Environment=XDG_SESSION_TYPE=wayland
 Environment=WLR_RENDERER=pixman
 Environment=WLR_BACKENDS=drm,libinput
 Environment=WLR_LIBINPUT_NO_DEVICES=1
+Environment=XCURSOR_SIZE=1
+Environment=XCURSOR_THEME=
 WorkingDirectory=$PI_HOME
 ExecStartPre=/bin/mkdir -p /run/user/$(id -u $PI_USER)
 ExecStartPre=/bin/chown $PI_USER:$PI_USER /run/user/$(id -u $PI_USER)
