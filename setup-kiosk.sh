@@ -106,7 +106,7 @@ wtype -M alt -M logo -k h -m logo -m alt
 (
     while true; do
         # Every 4 minutes, simulate activity
-        ydotool key 255:1 255:0
+        wtype -M alt -M logo -k h -m logo -m alt
         sleep 240
     done
 ) &
