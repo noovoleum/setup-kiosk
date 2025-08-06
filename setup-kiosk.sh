@@ -43,7 +43,7 @@ echo ""
 # Step 1: Update and Install Packages
 echo "--> Step 1: Updating and installing required packages..."
 apt-get update
-apt-get install libwayland-client0 libwayland-server0 libwayland-dev weston labwc chromium-browser swayidle ydotool unclutter -y
+apt-get install libwayland-client0 libwayland-server0 libwayland-dev weston labwc chromium-browser swayidle ydotool -y
 # Install additional dependencies that might be needed
 apt-get install libdrm2 libgbm1 libegl1-mesa libgl1-mesa-dri -y
 # Install polkit for proper seat management (required for labwc)
@@ -110,8 +110,6 @@ chromium-browser \\
     --disable-features=Translate \\
     --no-first-run \\
     --user-data-dir=/tmp/chromium_kiosk_profile \\
-    --remote-debugging-port=9222 \\
-    --remote-debugging-address=0.0.0.0 \\
     "$KIOSK_URL" &
 EOF
 chmod +x $PI_HOME/.config/labwc/autostart
