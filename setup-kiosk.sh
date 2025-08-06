@@ -67,6 +67,24 @@ echo ""
 # Step 3: Create labwc Configuration
 echo "--> Step 3: Creating labwc configuration..."
 mkdir -p $PI_HOME/.config/labwc
+
+# Create invisible cursor theme
+echo "--> Creating invisible cursor theme..."
+mkdir -p $PI_HOME/.local/share/icons/invisible/cursors
+# Create a 1x1 transparent cursor file
+echo -e '\x00\x00\x02\x00\x01\x00\x01\x01\x00\x00\x01\x00\x20\x00\x30\x00\x00\x00\x16\x00\x00\x00\x28\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x01\x00\x20\x00\x00\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00' > $PI_HOME/.local/share/icons/invisible/cursors/default
+# Copy to common cursor names
+for cursor_name in arrow left_ptr top_left_arrow hand1 hand2 watch xterm text ibeam; do
+    cp $PI_HOME/.local/share/icons/invisible/cursors/default $PI_HOME/.local/share/icons/invisible/cursors/$cursor_name
+done
+# Create index.theme
+cat > $PI_HOME/.local/share/icons/invisible/index.theme << 'CURSOR_THEME_EOF'
+[Icon Theme]
+Name=Invisible
+Comment=Invisible cursor theme
+CURSOR_THEME_EOF
+chown -R $PI_USER:$PI_USER $PI_HOME/.local/share/icons/invisible
+
 cat > $PI_HOME/.config/labwc/rc.xml << EOF
 <?xml version="1.0"?>
 <labwc_config>
@@ -92,9 +110,9 @@ swayidle -w timeout 10000 'echo "keepalive"' &
 # Kill any existing Chromium processes before starting new one
 pkill -f chromium-browser || true
 
-# Set cursor to minimal size (effectively invisible)
-export XCURSOR_SIZE=1
-export XCURSOR_THEME=""
+# Set cursor to invisible theme
+export XCURSOR_THEME="invisible"
+export XCURSOR_SIZE=24
 
 # Start a 'keep-alive' process to prevent monitor sleep
 (
@@ -150,8 +168,8 @@ if [ -z "\$WAYLAND_DISPLAY" ] && [ "\$(tty)" = "/dev/tty1" ]; then
         export GDK_BACKEND=wayland
         export MOZ_ENABLE_WAYLAND=1
         export WLR_RENDERER=pixman
-        export XCURSOR_SIZE=1
-        export XCURSOR_THEME=""
+        export XCURSOR_THEME="invisible"
+        export XCURSOR_SIZE=24
         
         # Create runtime directory
         mkdir -p \$XDG_RUNTIME_DIR
@@ -345,8 +363,8 @@ Environment=XDG_SESSION_TYPE=wayland
 Environment=WLR_RENDERER=pixman
 Environment=WLR_BACKENDS=drm,libinput
 Environment=WLR_LIBINPUT_NO_DEVICES=1
-Environment=XCURSOR_SIZE=1
-Environment=XCURSOR_THEME=
+Environment=XCURSOR_THEME=invisible
+Environment=XCURSOR_SIZE=24
 WorkingDirectory=$PI_HOME
 ExecStartPre=/bin/mkdir -p /run/user/$(id -u $PI_USER)
 ExecStartPre=/bin/chown $PI_USER:$PI_USER /run/user/$(id -u $PI_USER)
