@@ -74,6 +74,12 @@ cat > $PI_HOME/.config/labwc/rc.xml << EOF
     <core>
         <gap>0</gap>
     </core>
+    <keyboard>
+        <keybind key="A-W-h">
+            <action name="HideCursor" />
+            <action name="WarpCursor" x="-1" y="-1" />
+        </keybind>
+    </keyboard>
     <windowRules>
         <windowRule identifier="chromium-browser">
             <action name="Maximize"/>
@@ -92,6 +98,9 @@ swayidle -w timeout 10000 'echo "keepalive"' &
 
 # Kill any existing Chromium processes before starting new one
 pkill -f chromium-browser || true
+
+# Hide cursor using labwc keybind (Alt+Win+H)
+wtype -M alt -M logo -k h -m logo -m alt
 
 # Start a 'keep-alive' process to prevent monitor sleep
 (
