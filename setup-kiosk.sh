@@ -112,18 +112,22 @@ wtype -M alt -M logo -k h -m logo -m alt
 ) &
 
 # Launch Chromium in kiosk mode
-chromium-browser \\
-    --kiosk \\
-    --ozone-platform=wayland \\
-    --enable-features=UseOzonePlatform \\
-    --noerrdialogs \\
-    --disable-infobars \\
-    --disable-cache \\
-    --disable-session-crashed-bubble \\
-    --disable-component-update \\
-    --disable-features=Translate \\
-    --no-first-run \\
-    --user-data-dir=/tmp/chromium_kiosk_profile \\
+chromium-browser \
+    --kiosk \
+    --ozone-platform=wayland \
+    --enable-features=UseOzonePlatform \
+    --noerrdialogs \
+    --disable-infobars \
+    --disable-cache \
+    --disable-session-crashed-bubble \
+    --disable-component-update \
+    --disable-features=Translate \
+    --no-first-run \
+    --user-data-dir=/tmp/chromium_kiosk_profile \
+    --ignore-gpu-blocklist \
+    --enable-gpu-rasterization \
+    --enable-zero-copy \
+    --use-gl=egl \
     "$KIOSK_URL" &
 EOF
 chmod +x $PI_HOME/.config/labwc/autostart
