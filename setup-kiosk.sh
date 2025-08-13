@@ -93,6 +93,9 @@ mkdir -p $PI_HOME/.config/labwc
 cat > $PI_HOME/.config/labwc/autostart << EOF
 #!/bin/bash
 
+# Reconfigure labwc
+labwc --reconfigure
+
 # Disable screen blanking and power management
 swayidle -w timeout 10000 'echo "keepalive"' &
 
