@@ -121,7 +121,6 @@ chromium-browser \
     --enable-features=UseOzonePlatform \
     --noerrdialogs \
     --disable-infobars \
-    --disable-cache \
     --disable-session-crashed-bubble \
     --disable-component-update \
     --disable-features=Translate \
