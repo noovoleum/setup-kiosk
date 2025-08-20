@@ -92,6 +92,8 @@ EOF
 mkdir -p $PI_HOME/.config/labwc
 cat > $PI_HOME/.config/labwc/autostart << EOF
 #!/bin/bash
+# Set Resolution
+wlr-randr --output HDMI-A-1 --custom-mode 1920x1080@60 &
 
 # Reconfigure labwc
 labwc --reconfigure
@@ -114,23 +116,27 @@ wtype -M alt -M logo -k h -m logo -m alt
     done
 ) &
 
-# Launch Chromium in kiosk mode
-chromium-browser \
-    --kiosk \
-    --ozone-platform=wayland \
-    --enable-features=UseOzonePlatform \
-    --noerrdialogs \
-    --disable-infobars \
-    --disable-session-crashed-bubble \
-    --disable-component-update \
-    --disable-features=Translate \
-    --no-first-run \
-    --user-data-dir=/tmp/chromium_kiosk_profile \
-    --ignore-gpu-blocklist \
-    --enable-gpu-rasterization \
-    --enable-zero-copy \
-    --use-gl=egl \
-    "$KIOSK_URL" &
+while true; do
+    chromium-browser \
+        --kiosk \
+        --ozone-platform=wayland \
+        --enable-features=UseOzonePlatform \
+        --noerrdialogs \
+        --disable-infobars \
+        --disable-session-crashed-bubble \
+        --disable-component-update \
+        --disable-features=Translate \
+        --no-first-run \
+        --user-data-dir=/tmp/chromium_kiosk_profile \
+        --ignore-gpu-blocklist \
+        --enable-gpu-rasterization \
+        --enable-zero-copy \
+        --use-gl=egl \
+        "$KIOSK_URL"
+    # Wait for Chromium to exit, then restart after a short delay
+    sleep 2
+    echo "Chromium exited, restarting..." >&2
+done &
 EOF
 chmod +x $PI_HOME/.config/labwc/autostart
 chown -R $PI_USER:$PI_USER $PI_HOME/.config
