@@ -92,8 +92,6 @@ EOF
 mkdir -p $PI_HOME/.config/labwc
 cat > $PI_HOME/.config/labwc/autostart << EOF
 #!/bin/bash
-# Set Resolution
-wlr-randr --output HDMI-A-1 --custom-mode 1920x1080@60 &
 
 # Reconfigure labwc
 labwc --reconfigure
@@ -116,34 +114,23 @@ wtype -M alt -M logo -k h -m logo -m alt
     done
 ) &
 
-# Start Chromium monitoring and restart process
-(
-    while true; do
-        # Check if Chromium is already running
-        if ! pgrep -f "chromium-browser.*kiosk" > /dev/null; then
-            echo "Starting Chromium browser..." >&2
-            chromium-browser \\
-                --kiosk \\
-                --ozone-platform=wayland \\
-                --enable-features=UseOzonePlatform \\
-                --noerrdialogs \\
-                --disable-infobars \\
-                --disable-session-crashed-bubble \\
-                --disable-component-update \\
-                --disable-features=Translate \\
-                --no-first-run \\
-                --user-data-dir=/tmp/chromium_kiosk_profile \\
-                --ignore-gpu-blocklist \\
-                --enable-gpu-rasterization \\
-                --enable-zero-copy \\
-                --use-gl=egl \\
-                "$KIOSK_URL" &
-            echo "Chromium started with PID $!" >&2
-        fi
-        # Check every 5 seconds if Chromium is still running
-        sleep 5
-    done
-) &
+# Launch Chromium in kiosk mode
+chromium-browser \
+    --kiosk \
+    --ozone-platform=wayland \
+    --enable-features=UseOzonePlatform \
+    --noerrdialogs \
+    --disable-infobars \
+    --disable-session-crashed-bubble \
+    --disable-component-update \
+    --disable-features=Translate \
+    --no-first-run \
+    --user-data-dir=/tmp/chromium_kiosk_profile \
+    --ignore-gpu-blocklist \
+    --enable-gpu-rasterization \
+    --enable-zero-copy \
+    --use-gl=egl \
+    "$KIOSK_URL" &
 EOF
 chmod +x $PI_HOME/.config/labwc/autostart
 chown -R $PI_USER:$PI_USER $PI_HOME/.config
