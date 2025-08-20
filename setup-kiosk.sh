@@ -116,27 +116,34 @@ wtype -M alt -M logo -k h -m logo -m alt
     done
 ) &
 
-while true; do
-    chromium-browser \
-        --kiosk \
-        --ozone-platform=wayland \
-        --enable-features=UseOzonePlatform \
-        --noerrdialogs \
-        --disable-infobars \
-        --disable-session-crashed-bubble \
-        --disable-component-update \
-        --disable-features=Translate \
-        --no-first-run \
-        --user-data-dir=/tmp/chromium_kiosk_profile \
-        --ignore-gpu-blocklist \
-        --enable-gpu-rasterization \
-        --enable-zero-copy \
-        --use-gl=egl \
-        "$KIOSK_URL"
-    # Wait for Chromium to exit, then restart after a short delay
-    sleep 2
-    echo "Chromium exited, restarting..." >&2
-done &
+# Start Chromium monitoring and restart process
+(
+    while true; do
+        # Check if Chromium is already running
+        if ! pgrep -f "chromium-browser.*kiosk" > /dev/null; then
+            echo "Starting Chromium browser..." >&2
+            chromium-browser \\
+                --kiosk \\
+                --ozone-platform=wayland \\
+                --enable-features=UseOzonePlatform \\
+                --noerrdialogs \\
+                --disable-infobars \\
+                --disable-session-crashed-bubble \\
+                --disable-component-update \\
+                --disable-features=Translate \\
+                --no-first-run \\
+                --user-data-dir=/tmp/chromium_kiosk_profile \\
+                --ignore-gpu-blocklist \\
+                --enable-gpu-rasterization \\
+                --enable-zero-copy \\
+                --use-gl=egl \\
+                "$KIOSK_URL" &
+            echo "Chromium started with PID $!" >&2
+        fi
+        # Check every 5 seconds if Chromium is still running
+        sleep 5
+    done
+) &
 EOF
 chmod +x $PI_HOME/.config/labwc/autostart
 chown -R $PI_USER:$PI_USER $PI_HOME/.config
