@@ -92,7 +92,8 @@ EOF
 mkdir -p $PI_HOME/.config/labwc
 cat > $PI_HOME/.config/labwc/autostart << EOF
 #!/bin/bash
-
+# Set Resolution
+wlr-randr --output HDMI-A-1 --custom-mode 1920x1080 &
 
 # Reconfigure labwc
 labwc --reconfigure
@@ -115,23 +116,8 @@ wtype -M alt -M logo -k h -m logo -m alt
     done
 ) &
 
-# Launch Chromium in kiosk mode
-chromium-browser \\
-    --kiosk \\
-    --ozone-platform=wayland \\
-    --enable-features=UseOzonePlatform \\
-    --noerrdialogs \\
-    --disable-infobars \\
-    --disable-session-crashed-bubble \\
-    --disable-component-update \\
-    --disable-features=Translate \\
-    --no-first-run \\
-    --user-data-dir=/tmp/chromium_kiosk_profile \\
-    --ignore-gpu-blocklist \\
-    --enable-gpu-rasterization \\
-    --enable-zero-copy \\
-    --use-gl=egl \\
-    "$KIOSK_URL" &
+# Chromium will be started by the kiosk-chromium.service
+# This ensures better process management and automatic restart capabilities
 EOF
 chmod +x $PI_HOME/.config/labwc/autostart
 chown -R $PI_USER:$PI_USER $PI_HOME/.config
@@ -364,12 +350,12 @@ ExecStart=/usr/bin/labwc
 Restart=always
 RestartSec=5
 TTYPath=/dev/tty1
-StandardOutput=journal
-StandardError=journal
+StandardOutput=append:/var/log/ucollect-box/kiosk/labwc.log
+StandardError=append:/var/log/ucollect-box/kiosk/labwc.log
 PAMName=login
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=graphical.target
 EOF
 
 # Enable the service but don't start it yet (will start after reboot)
@@ -378,23 +364,321 @@ systemctl enable kiosk-labwc.service
 echo "--> Systemd service created and enabled."
 echo ""
 
-# Step 10: Update the .profile to use fallback method
-echo "--> Step 10: Updating .profile with fallback method..."
+# Step 10: Create ucollect-box directories
+echo "--> Step 10: Creating ucollect-box directories..."
+mkdir -p /opt/ucollect-box/kiosk
+mkdir -p /var/log/ucollect-box/kiosk
+chown -R $PI_USER:$PI_USER /opt/ucollect-box
+chown -R $PI_USER:$PI_USER /var/log/ucollect-box
+chmod 755 /opt/ucollect-box/kiosk
+chmod 755 /var/log/ucollect-box/kiosk
+echo "--> ucollect-box directories created"
+
+# Create logrotate configuration for kiosk logs
+echo "--> Setting up logrotate for kiosk logs..."
+cat > /etc/logrotate.d/ucollect-box-kiosk << EOF
+/var/log/ucollect-box/kiosk/*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 644 $PI_USER $PI_USER
+    copytruncate
+}
+EOF
+echo "--> Logrotate configuration created"
+echo ""
+
+# Step 11: Create Chromium launch script
+echo "--> Step 11: Creating Chromium launch script..."
+cat > /opt/ucollect-box/kiosk/start-chromium.sh << EOF
+#!/bin/bash
+
+# ==============================================================================
+# Chromium Kiosk Launch Script
+#
+# Description:
+# This script launches Chromium in kiosk mode with all necessary flags.
+# Modify this file to customize Chromium behavior without editing systemd service.
+# ==============================================================================
+
+# Configuration
+KIOSK_URL="$KIOSK_URL"
+USER_DATA_DIR="/tmp/chromium_kiosk_profile"
+LOG_FILE="/var/log/ucollect-box/kiosk/chromium.log"
+
+# Logging function
+log_message() {
+    echo "[\$(date '+%Y-%m-%d %H:%M:%S')] \$1"
+}
+
+log_message "Starting Chromium kiosk..."
+log_message "Target URL: \$KIOSK_URL"
+
+# Clean up any existing profile
+if [ -d "\$USER_DATA_DIR" ]; then
+    log_message "Cleaning up existing profile directory"
+    rm -rf "\$USER_DATA_DIR"
+fi
+
+# Ensure we have proper Wayland environment
+export XDG_RUNTIME_DIR=\${XDG_RUNTIME_DIR:-/run/user/\$(id -u)}
+export XDG_SESSION_TYPE=\${XDG_SESSION_TYPE:-wayland}
+
+# Auto-detect Wayland display or use fallback
+if [ -z "\$WAYLAND_DISPLAY" ]; then
+    # Look for existing Wayland sockets
+    if [ -S "\$XDG_RUNTIME_DIR/wayland-0" ]; then
+        export WAYLAND_DISPLAY=wayland-0
+        log_message "Auto-detected WAYLAND_DISPLAY=wayland-0"
+    elif [ -S "\$XDG_RUNTIME_DIR/wayland-1" ]; then
+        export WAYLAND_DISPLAY=wayland-1
+        log_message "Auto-detected WAYLAND_DISPLAY=wayland-1"
+    else
+        export WAYLAND_DISPLAY=wayland-0
+        log_message "No Wayland socket found, using fallback WAYLAND_DISPLAY=wayland-0"
+    fi
+fi
+
+log_message "Environment: XDG_RUNTIME_DIR=\$XDG_RUNTIME_DIR, WAYLAND_DISPLAY=\$WAYLAND_DISPLAY"
+
+# Check if Wayland socket exists before proceeding
+if [ ! -S "\$XDG_RUNTIME_DIR/\$WAYLAND_DISPLAY" ]; then
+    log_message "ERROR: Wayland socket \$XDG_RUNTIME_DIR/\$WAYLAND_DISPLAY does not exist!"
+    log_message "Available sockets in \$XDG_RUNTIME_DIR:"
+    ls -la "\$XDG_RUNTIME_DIR/" | grep -E "(wayland|socket)" || log_message "No Wayland sockets found"
+    log_message "Waiting 5 seconds for compositor to initialize..."
+    sleep 5
+    
+    if [ ! -S "\$XDG_RUNTIME_DIR/\$WAYLAND_DISPLAY" ]; then
+        log_message "FATAL: Wayland compositor is not running or socket is not available"
+        exit 1
+    fi
+fi
+
+log_message "Wayland socket found: \$XDG_RUNTIME_DIR/\$WAYLAND_DISPLAY"
+
+# Chromium flags for kiosk mode
+CHROMIUM_FLAGS=(
+    --kiosk
+    --ozone-platform=wayland
+    --enable-features=UseOzonePlatform 
+    --noerrdialogs 
+    --disable-infobars 
+    --disable-session-crashed-bubble 
+    --disable-component-update 
+    --disable-features=Translate 
+    --no-first-run 
+    --user-data-dir=/tmp/chromium_kiosk_profile 
+    --ignore-gpu-blocklist 
+    --enable-gpu-rasterization 
+    --enable-zero-copy 
+    --use-gl=egl 
+)
+
+log_message "Launching Chromium with \${#CHROMIUM_FLAGS[@]} flags"
+
+# Function to check if compositor is ready
+wait_for_compositor() {
+    local timeout=30
+    local count=0
+    while [ \$count -lt \$timeout ]; do
+        # Check if Wayland socket exists and is accessible
+        if [ -S "\$XDG_RUNTIME_DIR/\$WAYLAND_DISPLAY" ]; then
+            # Quick test to see if we can connect
+            if timeout 3 wlr-randr > /dev/null 2>&1; then
+                log_message "Wayland display ready after \${count}s"
+                return 0
+            else
+                log_message "Wayland socket exists but not yet responsive..."
+            fi
+        else
+            log_message "Waiting for Wayland socket \$XDG_RUNTIME_DIR/\$WAYLAND_DISPLAY..."
+        fi
+        sleep 2
+        count=\$((count + 2))
+    done
+    log_message "Timeout waiting for Wayland display after \${timeout}s"
+    return 1
+}
+
+# Wait for Wayland display to be ready
+log_message "Checking Wayland display readiness..."
+if ! wait_for_compositor; then
+    log_message "ERROR: Wayland display not ready, exiting"
+    exit 1
+fi
+
+# Launch Chromium with retry logic
+RETRY_COUNT=0
+MAX_RETRIES=3
+
+while [ \$RETRY_COUNT -lt \$MAX_RETRIES ]; do
+    log_message "Launch attempt \$((RETRY_COUNT + 1)) of \$MAX_RETRIES"
+    
+    # Start Chromium
+    /usr/bin/chromium-browser "\${CHROMIUM_FLAGS[@]}" "\$KIOSK_URL" &
+    CHROMIUM_PID=\$!
+    
+    # Wait a bit to see if it crashes immediately
+    sleep 5
+    
+    # Check if process is still running
+    if kill -0 \$CHROMIUM_PID 2>/dev/null; then
+        log_message "Chromium started successfully (PID: \$CHROMIUM_PID)"
+        wait \$CHROMIUM_PID  # Wait for the process to exit
+        EXIT_CODE=\$?
+        log_message "Chromium exited with code \$EXIT_CODE"
+        break
+    else
+        log_message "Chromium failed to start or crashed immediately"
+        RETRY_COUNT=\$((RETRY_COUNT + 1))
+        if [ \$RETRY_COUNT -lt \$MAX_RETRIES ]; then
+            log_message "Retrying in 10 seconds..."
+            sleep 10
+        fi
+    fi
+done
+
+if [ \$RETRY_COUNT -ge \$MAX_RETRIES ]; then
+    log_message "ERROR: All retry attempts failed"
+    exit 1
+fi
+EOF
+
+chmod +x /opt/ucollect-box/kiosk/start-chromium.sh
+chown $PI_USER:$PI_USER /opt/ucollect-box/kiosk/start-chromium.sh
+echo "--> Chromium launch script created at /opt/ucollect-box/kiosk/start-chromium.sh"
+echo ""
+
+# Step 12: Create systemd service for Chromium kiosk
+echo "--> Step 12: Creating systemd service for Chromium kiosk..."
+cat > /etc/systemd/system/kiosk-chromium.service << EOF
+[Unit]
+Description=Chromium Kiosk Browser
+After=kiosk-labwc.service
+Wants=kiosk-labwc.service
+BindsTo=kiosk-labwc.service
+PartOf=kiosk-labwc.service
+
+[Service]
+Type=simple
+User=$PI_USER
+Group=$PI_USER
+Environment=XDG_RUNTIME_DIR=/run/user/$(id -u $PI_USER)
+Environment=XDG_SESSION_TYPE=wayland
+Environment=DISPLAY=
+Environment=DBUS_SESSION_BUS_ADDRESS=
+Environment=LIBGL_ALWAYS_SOFTWARE=1
+WorkingDirectory=$PI_HOME
+ExecCondition=/bin/systemctl --quiet is-active kiosk-labwc.service
+ExecStartPre=/bin/rm -rf /tmp/chromium_kiosk_profile
+ExecStart=/opt/ucollect-box/kiosk/start-chromium.sh
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/ucollect-box/kiosk/chromium.log
+StandardError=append:/var/log/ucollect-box/kiosk/chromium.log
+
+[Install]
+WantedBy=kiosk-labwc.service
+EOF
+
+# Enable both services
+systemctl daemon-reload
+systemctl enable kiosk-chromium.service
+echo "--> Chromium kiosk service created and enabled."
+echo ""
+
+# Step 13: Create daily restart timer for kiosk services
+echo "--> Step 13: Creating daily restart timer for kiosk services..."
+cat > /etc/systemd/system/kiosk-daily-restart.service << EOF
+[Unit]
+Description=Daily Kiosk Service Restart
+After=kiosk-labwc.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/systemctl restart kiosk-labwc.service
+# Note: kiosk-chromium.service will restart automatically due to BindsTo dependency
+EOF
+
+cat > /etc/systemd/system/kiosk-daily-restart.timer << EOF
+[Unit]
+Description=Daily Kiosk Service Restart Timer
+Requires=kiosk-daily-restart.service
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+WakeSystem=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+# Enable and start the timer
+systemctl daemon-reload
+systemctl enable kiosk-daily-restart.timer
+systemctl start kiosk-daily-restart.timer
+echo "--> Daily restart timer created and enabled for 02:00 AM"
+echo ""
+
+# Step 14: Final completion message
+echo "--> Step 13: Setup complete!"
 
 echo "========================================================================"
 echo "                      SETUP IS COMPLETE!                                "
 echo "========================================================================"
 echo ""
-echo "The system is now configured for Wayland with labwc in multiple ways:"
-echo "  1. Systemd service: kiosk-labwc.service (primary method)"
-echo "  2. Auto-login fallback in .profile (backup method)"
+echo "The system is now configured for Wayland with labwc and separate services:"
+echo "  1. kiosk-labwc.service: Runs the labwc compositor"
+echo "  2. kiosk-chromium.service: Runs Chromium kiosk (auto-restarts if it crashes)"
+echo "  3. kiosk-daily-restart.timer: Automatically restarts kiosk at 02:00 AM daily"
+echo "  4. Auto-login fallback in .profile (backup method)"
+echo ""
+echo "Logs are stored in /var/log/ucollect-box/kiosk/ with automatic rotation:"
+echo "  - labwc.log: Compositor logs (rotated daily, 7 days retained)"
+echo "  - chromium.log: Browser logs (rotated daily, 7 days retained)"
+echo ""
+echo "Scripts are stored in /opt/ucollect-box/kiosk/:"
+echo "  - start-chromium.sh: Chromium launch script (edit to customize behavior)"
 echo ""
 echo "To start the kiosk immediately, you can:"
 echo "  - Reboot: sudo reboot (recommended)"
-echo "  - Or start the service: sudo systemctl start kiosk-labwc.service"
+echo "  - Or start labwc service: sudo systemctl start kiosk-labwc.service"
+echo "  - Note: Chromium service will start automatically with labwc"
 echo ""
 echo "To check if it's working:"
 echo "  - Run the diagnostic: ~/check-wayland.sh"
-echo "  - Check service status: sudo systemctl status kiosk-labwc.service"
-echo "  - Check logs: sudo journalctl -u kiosk-labwc.service -f"
+echo "  - Check compositor: sudo systemctl status kiosk-labwc.service"
+echo "  - Check browser: sudo systemctl status kiosk-chromium.service"
+echo "  - Check daily timer: sudo systemctl status kiosk-daily-restart.timer"
+echo "  - View compositor logs: tail -f /var/log/ucollect-box/kiosk/labwc.log"
+echo "  - View browser logs: tail -f /var/log/ucollect-box/kiosk/chromium.log"
+echo "  - Edit Chromium config: nano /opt/ucollect-box/kiosk/start-chromium.sh"
 echo ""
+echo "Troubleshooting commands:"
+echo "  - Restart compositor: sudo systemctl restart kiosk-labwc.service"
+echo "  - Restart browser: sudo systemctl restart kiosk-chromium.service"
+echo "  - Stop services: sudo systemctl stop kiosk-labwc.service kiosk-chromium.service"
+echo "  - Check system logs: sudo journalctl -f"
+echo "  - Manual labwc test: ~/start-kiosk-manual.sh"
+echo "  - Debug Chromium: sudo journalctl -u kiosk-chromium.service -f"
+echo "  - Test Chromium script: sudo -u $PI_USER /opt/ucollect-box/kiosk/start-chromium.sh"
+echo ""
+echo "Daily restart timer management:"
+echo "  - Check timer status: sudo systemctl status kiosk-daily-restart.timer"
+echo "  - View next restart time: sudo systemctl list-timers kiosk-daily-restart.timer"
+echo "  - Disable daily restart: sudo systemctl disable --now kiosk-daily-restart.timer"
+echo "  - Enable daily restart: sudo systemctl enable --now kiosk-daily-restart.timer"
+echo "  - Trigger restart now: sudo systemctl start kiosk-daily-restart.service"
+echo ""
+echo "Configuration files:"
+echo "  - Kiosk URL: Edit KIOSK_URL in /opt/ucollect-box/kiosk/start-chromium.sh"
+echo "  - labwc config: ~/.config/labwc/rc.xml"
+echo "  - labwc autostart: ~/.config/labwc/autostart"
+echo "  - Log rotation: /etc/logrotate.d/ucollect-box-kiosk"
+echo ""
+echo "========================================================================"
