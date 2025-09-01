@@ -93,7 +93,6 @@ mkdir -p $PI_HOME/.config/labwc
 cat > $PI_HOME/.config/labwc/autostart << EOF
 #!/bin/bash
 
-
 # Reconfigure labwc
 labwc --reconfigure
 
@@ -101,7 +100,7 @@ labwc --reconfigure
 swayidle -w timeout 10000 'echo "keepalive"' &
 
 # Kill any existing Chromium processes before starting new one
-pkill -f chromium-browser || true
+pkill -f chromium || true
 
 # Hide cursor using labwc keybind (Alt+Win+H)
 wtype -M alt -M logo -k h -m logo -m alt
@@ -116,7 +115,7 @@ wtype -M alt -M logo -k h -m logo -m alt
 ) &
 
 # Launch Chromium in kiosk mode
-chromium-browser \\
+chromium \\
     --kiosk \\
     --ozone-platform=wayland \\
     --enable-features=UseOzonePlatform \\
