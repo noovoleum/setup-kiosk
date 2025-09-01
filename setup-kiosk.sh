@@ -102,7 +102,7 @@ labwc --reconfigure
 swayidle -w timeout 10000 'echo "keepalive"' &
 
 # Kill any existing Chromium processes before starting new one
-pkill -f chromium-browser || true
+pkill -f chromium || true
 
 # Hide cursor using labwc keybind (Alt+Win+H)
 wtype -M alt -M logo -k h -m logo -m alt
@@ -519,7 +519,7 @@ while [ \$RETRY_COUNT -lt \$MAX_RETRIES ]; do
     log_message "Launch attempt \$((RETRY_COUNT + 1)) of \$MAX_RETRIES"
     
     # Start Chromium
-    /usr/bin/chromium-browser "\${CHROMIUM_FLAGS[@]}" "\$KIOSK_URL" &
+    chromium "\${CHROMIUM_FLAGS[@]}" "\$KIOSK_URL" &
     CHROMIUM_PID=\$!
     
     # Wait a bit to see if it crashes immediately
